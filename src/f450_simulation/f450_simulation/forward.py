@@ -9,13 +9,13 @@ class QuadrotorZController(Node):
         super().__init__('quadrotor_x_controller')
 
         # set target point 
-        self.target_height = 4.0  
+        self.target_X = 3.0  
 
         # PID controller
         # PID gain
-        self.Kp = 2  # proportion gain
-        self.Ki = 1  # Integral gain
-        self.Kd = 10  # Derivation gain
+        self.Kp = 1  # proportion gain
+        self.Ki = 0.1  # Integral gain
+        self.Kd = 1  # Derivation gain
 
         # PID variable
         self.previous_error = 0.0
@@ -23,7 +23,7 @@ class QuadrotorZController(Node):
 
         
         # Current height
-        self.current_height = None
+        self.current_X = 0
 
         self.drone_name = 'F450'  # my Gazebo model name
         self.link_name = 'F450::link'  
@@ -50,17 +50,17 @@ class QuadrotorZController(Node):
         try:
             response = future.result()
             if response.success:
-                self.current_height = response.state.pose.position.z
-                self.get_logger().info(f"current positon: {self.current_height}")
+                self.current_X = response.state.pose.position.x
+                self.get_logger().info(f"current positon: {self.current_X}")
                
-                force_z = self.PID_controller()
-                self.get_logger().info(f"F: {force_z}")
+                force_x = self.PID_controller()
+            
 
                 # generate Wrench msg
                 wrench_msg = Wrench()
-                wrench_msg.force.x = 0.0
+                wrench_msg.force.x = force_x
                 wrench_msg.force.y = 0.0
-                wrench_msg.force.z = force_z
+                wrench_msg.force.z = 9.81*2
 
             # publish force information
                 self.force_publisher.publish(wrench_msg)
@@ -70,19 +70,15 @@ class QuadrotorZController(Node):
             self.get_logger().error(f"fail: {e}")
 
     def PID_controller(self):
-        if self.current_height is None:
-            self.get_logger().warn("The current height is not obtained, skip this control cycle")
-            return 0.0  # return 0
-
         # calculate height error
-        error = self.target_height - self.current_height
+        error = self.target_X - self.current_X
 
         # Update integrals and derivatives
         self.integral += error*0.1 
         derivative = (error - self.previous_error)/0.1
 
         # calculate output(force)
-        output = self.Kp * error + self.Ki * self.integral + self.Kd * derivative + 9.8*2
+        output = self.Kp * error + self.Ki * self.integral + self.Kd * derivative 
 
         # update
         self.previous_error = error
@@ -99,4 +95,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-

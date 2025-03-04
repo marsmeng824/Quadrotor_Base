@@ -30,6 +30,8 @@ setup(
                             'quad_broadcast = f450_simulation.quad_broadcast:main',
                             'takeoff = f450_simulation.takeoff:main',
                             'trajectory = f450_simulation.trajectory:main',
+                            'forward = f450_simulation.forward:main',
+                            'circlepid = f450_simulation.circlepid:main',
         ],
     },
 )

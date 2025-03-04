@@ -8,7 +8,7 @@ def generate_launch_description():
     # switch on takeoff node
     takeoff_node = launch_ros.actions.Node(
         package='f450_simulation',  #  package where the node locates
-        executable='takeoff',  # takeoff procedure
+        executable='pose',  # takeoff procedure
         name='takeoff'
     )
 
