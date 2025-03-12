@@ -35,7 +35,7 @@ def generate_launch_description():
             '-file', model_path,  # find the path
             '-x', '0.0',
             '-y', '0.0',
-            '-z', '0.0',
+            '-z', '1.0',
             '-timeout', '3'
         ],
        output='screen'

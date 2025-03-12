@@ -32,6 +32,7 @@ setup(
                             'trajectory = f450_simulation.trajectory:main',
                             'forward = f450_simulation.forward:main',
                             'circlepid = f450_simulation.circlepid:main',
+                            'orientation = f450_simulation.orientation:main',
         ],
     },
 )

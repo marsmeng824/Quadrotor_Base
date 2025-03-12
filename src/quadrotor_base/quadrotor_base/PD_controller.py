@@ -20,19 +20,15 @@ class QuadrotorController(Node):
 
         # initialization object and Kp,kd parameter
         self.target_z = 3.0  # height (m)
-        self.kp = 4.0      
-        self.kd = 4.0      
+        self.kp = 30      
+        self.kd = 10      
 
         # initialization state variable
         self.prev_error = 0.0
         self.prev_time = self.get_clock().now()
 
-        #initialization velocity and acceleration
-        self.velocity = 0.0  # initial velocity
-        self.acceleration = 0.0  # initial acceleration
-
         # start control loop
-        self.control_loop_timer = self.create_timer(0.1, self.control_loop)
+        self.control_loop_timer = self.create_timer(0.5, self.control_loop)
 
     def control_loop(self):
         self.get_logger().info("Starting control loop...")
@@ -72,23 +68,19 @@ class QuadrotorController(Node):
 
         # 误差微分
         error_derivative = (error - self.prev_error) / delta_time if delta_time > 0 else 0.0
-        control_output = self.kp * error + self.kd * error_derivative
-        self.acceleration = control_output
-        
-        
-        # integral to get velocity
-        self.velocity += (self.acceleration+ 9.81) * delta_time
-        
+        control_output = (self.kp * error + self.kd * error_derivative - 9.81) *delta_time
 
         # update variables
         self.prev_error = error
         self.prev_time = current_time
 
-        self.get_logger().info(f"twist: {self.velocity:.3f},"
+        self.get_logger().info(f"Control output: {control_output:.3f},"
                                f"Error: {error:.3f} m, "
+                               f"Error Derivative: {error_derivative:.3f} m/s, "
+                               f"Delta Time: {delta_time:.6f} s, "
                                )
 
-        return self.velocity
+        return control_output
 
     def set_quadrotor_state(self, control_input):
         # create SetEntityState request

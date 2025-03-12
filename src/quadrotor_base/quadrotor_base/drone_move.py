@@ -34,7 +34,7 @@ class SetEntityStateNode(Node):
         request.state.name = 'quadrotor'
 
         # set model's pose (pose)
-        request.state.pose.position.x = 2.0 * self.counter  
+        request.state.pose.position.x = 0.0 * self.counter  
         request.state.pose.position.y = 0.0
         request.state.pose.position.z = 1.0+0.5*self.counter  
         request.state.pose.orientation.x = 0.0

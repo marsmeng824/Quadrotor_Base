@@ -4,23 +4,23 @@ import matplotlib.pyplot as plt
 # weight
 m = 1.0
 # sample time
-Ts= 0.1
+Ts= 0.01
 # target position
 X_target = 10
 # total time
 T = 10
 
 # gain parameter
-Kp = 4
-Ki = 0
-Kd = 4
+Kp = 1.5
+ki = 0.75
+Kd = 0.75
 
 #initial parameter
 x = 0
 v = 0
 a = 0
 error_prev = 0
-integral = 0
+
 
 # record datas
 time = np.arange(0,T,Ts)
@@ -31,9 +31,8 @@ control_history = []
 # control_loop
 for i in time:
     error = X_target - x
-    integral += error*Ts
     derivative = (error - error_prev) / Ts
-    F = Kp * error + Ki * integral + Kd * derivative
+    F = Kp * error + ki*Ts  + Kd * derivative 
     control_history.append(F)
 
     #state
