@@ -22,23 +22,21 @@ Python 3 / C++ (For control algorithm development)
 You can install them on your computer through the official website
 
 1. **Clone the repository**:
-   ```sh
-  git clone https://github.com/marsmeng824/Quadrotor_Base.git
+   ```bash
+   git clone https://github.com/marsmeng824/Quadrotor_Base.git
+   cd Quadrotor_Base
+   
 
 2. **Setup your ROS2 workspace**:
-      mkdir -p ~/ros2_ws/src
-      cd ~/ros2_ws/src
-   
-      # Move the cloned repository into the workspace
-      mv ~/Quadrotor_Base ./
-      cd ..
-   
-     # Install dependencies
-     rosdep install --from-paths src --ignore-src -r -y
-     # Build the workspace
-     colcon build
-     # Source the environment
-     source install/setup.bash
+   ```bash   
+   mkdir -p ~/ros2_ws/src
+   cd ~/ros2_ws/src
+   # Install dependencies
+   rosdep install --from-paths src --ignore-src -r -y
+   # Build the workspace
+   colcon build
+   # Source the environment
+   source install/setup.bash
    
 3. **Run the simulation**
 
