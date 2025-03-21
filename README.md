@@ -1,19 +1,15 @@
 # 🚀 Quadrotor_PID_control
 
-## 📖 Purpose Tools and zMethods
+## 📖 Purpose Tools and Methods
 In today's world, drones play a crucial role in various fields such as inspection, search, and rescue. In these tasks, the ability of drones to autonomously navigate to target locations is essential for mission success.
 
 The goal of this project is to achieve autonomous control of drones in the Gazebo simulation environment, including:
 
 Position control: Precisely navigating to target points.
-Attitude control: Ensuring the drone maintains stability during flight.
-Autonomous flight: Utilizing ROS 2 for path planning and control, enabling fully autonomous navigation from the starting point to the target.
-This project is based on ROS 2 + Gazebo and implements control algorithms (such as PID and MPC) to optimize drone navigation and stability.
 
-## 📦 Features
-- ✅ Feature 1
-- ✅ Feature 2
-- ✅ Feature 3
+Attitude control: Ensure the drone remains stable and oriented correctly during flight.
+
+Autonomous flight：Simulate various flight behaviors of drones, such as takeoff, forward, circling, and hovering by cascade PID controller.
 
 ## 🛠 Installation
 This project requires the following software environment:
@@ -23,6 +19,30 @@ ROS 2 Humble (For robot communication)
 Gazebo (For UAV simulation)
 Python 3 / C++ (For control algorithm development)
 
+You can install them on your computer through the official website
+
 1. **Clone the repository**:
    ```sh
-   git clone https://github.com/your-username/your-repo.git
+  git clone https://github.com/marsmeng824/Quadrotor_Base.git
+
+2. **Setup your ROS2 workspace**:
+      mkdir -p ~/ros2_ws/src
+      cd ~/ros2_ws/src
+   
+      # Move the cloned repository into the workspace
+      mv ~/Quadrotor_Base ./
+      cd ..
+   
+     # Install dependencies
+     rosdep install --from-paths src --ignore-src -r -y
+     # Build the workspace
+     colcon build
+     # Source the environment
+     source install/setup.bash
+   
+3. **Run the simulation**
+
+## 📦 Functions
+    
+
+   
