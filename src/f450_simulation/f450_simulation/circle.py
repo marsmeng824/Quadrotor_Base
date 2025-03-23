@@ -1,37 +1,32 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Wrench
 from gazebo_msgs.srv import GetEntityState
+from geometry_msgs.msg import Wrench, Vector3
+import time
 import numpy as np
 from f450_simulation.vectorPID import VectorPID
 import f450_simulation.transform3d as tf
-from geometry_msgs.msg import Vector3
 
 
-class QuadrotorPIDController(Node):
+class QuadrotorCircleController(Node):
     def __init__(self):
-        super().__init__('quadrotor_pid_controller')
+        super().__init__('quadrotor_circle_controller')
+        self.radius = 2.0
+        self.angular_speed = 0.5
+        self.target_height = 2.0
 
-        # Create a Client to Gazebo entity state
-        self.get_entity_state_client = self.create_client(GetEntityState, '/gazebo/get_entity_state')
-        # create a Publisher to publish control command
-        self.force_publisher = self.create_publisher(Wrench, '/demo/force', 10)
-        
         # PID gain
         self.Kp_att = 1
         self.Kd_att = 3
-      
-        # target position
-        self.x_d, self.y_d, self.z_d = 3.0, 0.0, 2.0  
 
-        # physics parameter
-        self.mass = 2  # kg
-        self.g = 9.81  # m/s² 
-        self.drone_name = 'F450'
-        
-        # PID control
+        #PID control
         self.pid_pos = VectorPID(kp=[0.5,0.5,2], ki=[0.1,0.1,0.1], kd=[3,3,3])
         self.pid_att = VectorPID(self.Kp_att, 0.5, self.Kd_att)
+
+         # parameter
+        self.mass = 2  # kg
+        self.g = 9.81  # m/s^2
+        self.drone_name = 'F450'  # my Gazebo model name
 
         self.J = np.array([
             [0.0411, 0, 0],
@@ -39,30 +34,32 @@ class QuadrotorPIDController(Node):
             [0, 0, 0.0599]
          ])
 
-        # sample time
-        self.dt = 0.1
-        
-        # save the current entity state
-        self.current_state = None  
+         # publish /demo/force topic
+        self.force_publisher = self.create_publisher(Wrench, '/demo/force', 10)
+        # Gazebo get client service
+        self.get_entity_state_client = self.create_client(GetEntityState, '/gazebo/get_entity_state')
 
-        # switch on timer
-        self.timer = self.create_timer(self.dt, self.get_state)  # call get_state()
+        while not self.get_entity_state_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Waiting for /demo/get_entity_state service...')
+
+        # save the current entity state
+        self.current_state = None
+
+        self.start_time = time.time()
+        self.timer = self.create_timer(0.1, self.get_state)  # 0.1s control loop
 
     def get_state(self):
-        """ get entity state by gezabo(async) """
-        req = GetEntityState.Request()
-        req.name = self.drone_name
-        req.reference_frame = 'world'
-        
-        if not self.get_entity_state_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().error("Gazebo get_entity_state fail")
-            return
-        
-        future = self.get_entity_state_client.call_async(req)
-        future.add_done_callback(self.get_entity_state_callback)  # callback async
+        # get entity state
+        request = GetEntityState.Request()
+        request.name = self.drone_name
+        future = self.get_entity_state_client.call_async(request)
+        request.reference_frame = 'world'
+
+        future = self.get_entity_state_client.call_async(request)
+        future.add_done_callback(self.get_entity_state_callback)
 
     def get_entity_state_callback(self, future):
-        """  executethe procedure by data  """
+         
         response = future.result()
         if response is None or not response.success:
             self.get_logger().error("can't get Gazebo entity state")
@@ -87,7 +84,6 @@ class QuadrotorPIDController(Node):
 
         # call control loop
         self.control_loop()
-
     def send_control(self, thrusts, torques):
         """ publish thrusts and torque """
         msg = Wrench()
@@ -105,7 +101,15 @@ class QuadrotorPIDController(Node):
         phi, theta, psi = self.current_state["phi"], self.current_state["theta"], self.current_state["psi"]
 
         # **Step 1: position control(outer control)**
-        e_pos = np.array([self.x_d - x, self.y_d - y, self.z_d - z])
+        current_time = time.time()
+
+        # calculate time and target trajectory
+        t = current_time - self.start_time
+        target_x = self.radius * np.cos(self.angular_speed * t)
+        target_y = self.radius * np.sin(self.angular_speed * t)
+        target_z = self.target_height
+
+        e_pos = np.array([target_x - x, target_y - y, target_z - z])
         
         x_acc ,y_acc,z_acc = self.pid_pos.compute(e_pos)  # target acceleration
 
@@ -134,8 +138,8 @@ class QuadrotorPIDController(Node):
         #torques_w = R_world_body@torques  # maintain altitude
         # **output thrust**
         thrust = R_world_body@np.array([0,0,T])  # maintain altitude
-        thrust_x = np.clip(thrust[0], -2.0, 2.0)  # X axis ±5N
-        thrust_y = np.clip(thrust[1], -2.0, 2.0)  # Y axis ±5N
+        thrust_x = np.clip(thrust[0], -2.0, 2.0)  # X axis ±2N
+        thrust_y = np.clip(thrust[1], -2.0, 2.0)  # Y axis ±2N
         thrust = np.array([thrust_x, thrust_y, thrust[2]])  # update the new thrust vector
         
         # **set entity state**
@@ -143,12 +147,13 @@ class QuadrotorPIDController(Node):
 
         print(f"[DEBUG] pitch: {theta}")
         print(f"[DEBUG] Attitude target: {theta_d}")
-
-def main():
-    rclpy.init()
-    controller = QuadrotorPIDController()
-    rclpy.spin(controller)
-    controller.destroy_node()
+            
+        
+def main(args=None):
+    rclpy.init(args=args)
+    node = QuadrotorCircleController()
+    rclpy.spin(node)
+    node.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':

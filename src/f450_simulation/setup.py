@@ -26,12 +26,10 @@ setup(
     license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={
-        'console_scripts': ['pose = f450_simulation.pose:main',
+        'console_scripts': ['circle = f450_simulation.circle:main',
                             'quad_broadcast = f450_simulation.quad_broadcast:main',
                             'takeoff = f450_simulation.takeoff:main',
                             'trajectory = f450_simulation.trajectory:main',
-                            'forward = f450_simulation.forward:main',
-                            'circlepid = f450_simulation.circlepid:main',
                             'orientation = f450_simulation.orientation:main',
         ],
     },
