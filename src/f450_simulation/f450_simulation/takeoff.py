@@ -120,7 +120,7 @@ class QuadrotorPIDController(Node):
         phi_d = np.arcsin(np.clip((self.mass / T) * (-y_acc), -1, 1))
         theta_d = np.arcsin(np.clip((self.mass / T) * x_acc, -1, 1))
 
-        phi_d = np.clip(phi_d, -np.pi/6, np.pi/6)  # 限制在 ±30°
+        phi_d = np.clip(phi_d, -np.pi/6, np.pi/6)  # limit at ±30°
         theta_d = np.clip(theta_d, -np.pi/6, np.pi/6)
 
         
@@ -142,9 +142,9 @@ class QuadrotorPIDController(Node):
         #torques_w = R_world_body@torques  # maintain altitude
         # **output thrust**
         thrust = R_world_body@np.array([0,0,T])  # maintain altitude
-        thrust_x = np.clip(thrust[0], -2.0, 2.0)  # X轴推力限幅在±2N
-        thrust_y = np.clip(thrust[1], -2.0, 2.0)  # Y轴推力限幅在±2N
-        thrust = np.array([thrust_x, thrust_y, thrust[2]])  # 更新推力向量
+        thrust_x = np.clip(thrust[0], -2.0, 2.0)  # X axis limit in ±2N
+        thrust_y = np.clip(thrust[1], -2.0, 2.0)  # Y axis limit in ±2N
+        thrust = np.array([thrust_x, thrust_y, thrust[2]])  # update thrust
         
         # **set entity state**
         self.send_control(thrust, torques)
