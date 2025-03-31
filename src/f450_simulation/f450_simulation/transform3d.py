@@ -29,3 +29,39 @@ def quat2euler(quaternion):
         yaw = 0
 
     return roll, pitch, yaw  # return (Roll, Pitch, Yaw)
+
+
+def acc_to_euler(acc_des, yaw_des):
+    """
+    acc_des: Expectation acceleration [ax, ay, az]
+    yaw_des: expectation yaw (rad)
+    Return: Target Euler Angle [roll_d, pitch_d, yaw_d]
+    """
+    g = 9.81
+    norm = np.linalg.norm(acc_des)
+    if norm < 1e-6:
+        acc_des = np.array([0, 0, g])
+        norm = g
+
+    # thrust orientation
+    z_b_des = acc_des / norm
+    ax, ay, az = z_b_des
+    psi = yaw_des
+
+    ## Compute desired roll and pitch from desired acceleration and yaw
+    theta_d = np.arcsin(ax * np.sin(psi) - ay * np.cos(psi))
+    phi_d = np.arctan2(ax * np.cos(psi) + ay * np.sin(psi), az)
+
+    return np.array([phi_d, theta_d, psi])
+
+def euler_to_omega(euler, euler_dot):
+        """Convert Euler angle rates to angular velocity (in body frame)"""
+        phi, theta, _ = euler
+
+        T = np.array([
+            [1, np.sin(phi)*np.tan(theta), np.cos(phi)*np.tan(theta)],
+            [0, np.cos(phi),              -np.sin(phi)],
+            [0, np.sin(phi)/np.cos(theta), np.cos(phi)/np.cos(theta)]
+        ])
+
+        return T @ euler_dot

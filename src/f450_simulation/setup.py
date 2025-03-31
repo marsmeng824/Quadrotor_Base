@@ -31,6 +31,7 @@ setup(
                             'takeoff = f450_simulation.takeoff:main',
                             'trajectory = f450_simulation.trajectory:main',
                             'orientation = f450_simulation.orientation:main',
+                            'test = f450_simulation.test:main',
         ],
     },
 )

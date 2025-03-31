@@ -18,26 +18,30 @@ class QuadrotorPIDController(Node):
         self.force_publisher = self.create_publisher(Wrench, '/demo/force', 10)
         
         # PID gain
-        self.Kp_att = 1
-        self.Kd_att = 3
+        self.Kp_att = 1.0
+        self.Kd_att = 0.2
       
         # target position
-        self.x_d, self.y_d, self.z_d = 3.0, 0.0, 2.0  
+        self.x_d, self.y_d, self.z_d = 2.0, 0.0, 2.0  
 
         # physics parameter
         self.mass = 2  # kg
         self.g = 9.81  # m/s² 
         self.drone_name = 'F450'
         
-        # PID control
-        self.pid_pos = VectorPID(kp=[0.5,0.5,2], ki=[0.1,0.1,0.1], kd=[3,3,3])
-        self.pid_att = VectorPID(self.Kp_att, 0.5, self.Kd_att)
+        # PID chontrol
+        self.pid_pos = VectorPID(kp=[0.5,0.5,2], ki=[0.01,0.01,0.1], kd=[2,2,3])
+        self.pid_att = VectorPID(self.Kp_att, 0.05, self.Kd_att)
+        self.pid_ang = VectorPID(self.Kp_att, 0.05, self.Kd_att)
+
 
         self.J = np.array([
             [0.0411, 0, 0],
             [0, 0.0478, 0],
             [0, 0, 0.0599]
          ])
+
+       
 
         # sample time
         self.dt = 0.1
@@ -95,7 +99,9 @@ class QuadrotorPIDController(Node):
         msg.torque = Vector3(x=torques[0], y=torques[1], z=torques[2])
 
         self.force_publisher.publish(msg)
-    
+
+
+
     def control_loop(self):
         """ only `self.current_state` not None execute """
         if self.current_state is None:
@@ -103,46 +109,54 @@ class QuadrotorPIDController(Node):
 
         x, y, z = self.current_state["x"], self.current_state["y"], self.current_state["z"]
         phi, theta, psi = self.current_state["phi"], self.current_state["theta"], self.current_state["psi"]
+        euler=np.array([phi,theta,psi])
+        omega=np.array([self.current_state["p"], self.current_state["q"], self.current_state["r"]])
 
         # **Step 1: position control(outer control)**
         e_pos = np.array([self.x_d - x, self.y_d - y, self.z_d - z])
-        
-        x_acc ,y_acc,z_acc = self.pid_pos.compute(e_pos)  # target acceleration
+        x_acc ,y_acc,z_acc = self.pid_pos.compute(e_pos)  # Translational Dynamics Model 
 
-        T = np.clip(self.mass * (z_acc + self.g), 0, 40)  # Compute required thrust 
+        # Limit acceleration in each axis to (-3, 3)
+        a_des = np.array([
+           np.clip(x_acc, -3.0, 3.0),
+           np.clip(y_acc, -3.0, 3.0),
+           np.clip(z_acc, -3.0, 3.0)
+        ])
 
-        #  Compute roll (ϕ_d) and pitch (θ_d) using Eq. (29) and (30)
-        phi_d = np.arcsin(np.clip((self.mass / T) * (-y_acc), -1, 1))
-        theta_d = np.arcsin(np.clip((self.mass / T) * x_acc, -1, 1))
+        ## T = np.clip(self.mass * (z_acc + self.g), 0, 40)  Compute required thrust
+
+
+        # **Step# Compute roll (ϕ_d) and pitch (θ_d) using Eq. (29) and (30)
+        g = 9.81
+        acc_des = a_des + np.array([0.0, 0.0, g])
+
+     # 3. compute expectation attitude 
+        euler_des = tf.acc_to_euler(acc_des,psi)
+        phi_d = euler_des[0]
+        theta_d = euler_des[1]
         psi_d = 0.0  # fixed yaw
 
-        phi_d = np.clip(phi_d, -np.pi/6, np.pi/6)  # limit ±30°
-        theta_d = np.clip(theta_d, -np.pi/6, np.pi/6)
+        # **Step 3: orientation control**
+        e_att = np.array([phi_d - phi, theta_d - theta, psi_d - psi])
+        angular_d = self.pid_att.compute(e_att)
 
-        # **Step 2: orientation control** 
-        e_att = np.array([phi_d - phi,theta_d - theta,psi_d - psi])
-        torques = self.J @ self.pid_att.compute(e_att)
-        
+        omega_d = tf.euler_to_omega(euler, angular_d)
+        e_oma = omega_d - omega
+        torques= self.J @self.pid_ang.compute(e_oma)
 
-         # **Step 3: body frame to world frame**
-        R_world_body = np.array([
-            [np.cos(psi) * np.cos(theta_d), np.cos(psi) * np.sin(theta_d) * np.sin(phi_d) - np.sin(psi) * np.cos(phi_d), np.cos(psi) * np.sin(theta_d) * np.cos(phi_d) + np.sin(psi) * np.sin(phi_d)],
-            [np.sin(psi) * np.cos(theta_d), np.sin(psi) * np.sin(theta_d) * np.sin(phi_d) + np.cos(psi) * np.cos(phi_d), np.sin(psi) * np.sin(theta_d) * np.cos(phi_d) - np.cos(psi) * np.sin(phi_d)],
-            [-np.sin(theta_d), np.cos(theta_d) * np.sin(phi), np.cos(theta_d) * np.cos(phi_d)]
-        ])
-        
-        #torques_w = R_world_body@torques  # maintain altitude
-        # **output thrust**
-        thrust = R_world_body@np.array([0,0,T])  # maintain altitude
-        thrust_x = np.clip(thrust[0], -2.0, 2.0)  # X axis ±5N
-        thrust_y = np.clip(thrust[1], -2.0, 2.0)  # Y axis ±5N
-        thrust = np.array([thrust_x, thrust_y, thrust[2]])  # update the new thrust vector
+        thrust_x = self.mass*acc_des[0]  
+        thrust_y = self.mass*acc_des[1]  
+        thrust_z = self.mass*acc_des[2]
+        thrust = np.array([thrust_x, thrust_y, thrust_z])  # update thrust
         
         # **set entity state**
         self.send_control(thrust, torques)
 
-        print(f"[DEBUG] pitch: {theta}")
-        print(f"[DEBUG] Attitude target: {theta_d}")
+        print(f"[DEBUG] Position Error: {e_pos}")
+        print(f"[DEBUG] Attitude Error: {e_att}")
+        print(f"[DEBUG] Thrust: {thrust}")
+        print(f"[DEBUG] Torques: {torques}")
+
 
 def main():
     rclpy.init()
@@ -153,4 +167,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
