@@ -4,7 +4,7 @@ from gazebo_msgs.srv import GetEntityState
 from geometry_msgs.msg import Wrench, Vector3
 import time
 import numpy as np
-from f450_simulation.vectorPID import VectorPID
+from f450_simulation.controller.PID import PID
 import f450_simulation.transform3d as tf
 
 
@@ -20,8 +20,8 @@ class QuadrotorCircleController(Node):
         self.Kd_att = 3
 
         #PID control
-        self.pid_pos = VectorPID(kp=[0.5,0.5,2], ki=[0.1,0.1,0.1], kd=[3,3,3])
-        self.pid_att = VectorPID(self.Kp_att, 0.5, self.Kd_att)
+        self.pid_pos = PID(kp=[0.5,0.5,2], ki=[0.1,0.1,0.1], kd=[3,3,3])
+        self.pid_att = PID(self.Kp_att, 0.5, self.Kd_att)
 
          # parameter
         self.mass = 2  # kg
@@ -113,40 +113,39 @@ class QuadrotorCircleController(Node):
         
         x_acc ,y_acc,z_acc = self.pid_pos.compute(e_pos)  # target acceleration
 
-        T = np.clip(self.mass * (z_acc + self.g), 0, 40)  # Compute required thrust 
+        # Limit acceleration in each axis to (-3, 3)
+        a_des = np.array([
+           np.clip(x_acc, -3.0, 3.0),
+           np.clip(y_acc, -3.0, 3.0),
+           np.clip(z_acc, -3.0, 3.0)
+        ])
 
-        #  Compute roll (ϕ_d) and pitch (θ_d) using Eq. (29) and (30)
-        phi_d = np.arcsin(np.clip((self.mass / T) * (-y_acc), -1, 1))
-        theta_d = np.arcsin(np.clip((self.mass / T) * x_acc, -1, 1))
+        #add gravity compensation
+        g = 9.81
+        acc_des = a_des + np.array([0.0, 0.0, g])
+
+     # Expectation Attitude: Compute roll (ϕ_d) and pitch (θ_d) using Eq. (29) and (30)
+        euler_des = tf.acc_to_euler(acc_des,psi)
+        phi_d = euler_des[0]
+        theta_d = euler_des[1]
         psi_d = 0.0  # fixed yaw
 
-        phi_d = np.clip(phi_d, -np.pi/6, np.pi/6)  # limit ±30°
-        theta_d = np.clip(theta_d, -np.pi/6, np.pi/6)
+        # **Step 3: orientation control**
+        e_att = np.array([phi_d - phi, theta_d - theta, psi_d - psi])
+        angular_d = self.pid_att.compute(e_att)
 
-        # **Step 2: orientation control** 
-        e_att = np.array([phi_d - phi,theta_d - theta,psi_d - psi])
-        torques = self.J @ self.pid_att.compute(e_att)
-        
+        torques= self.J @angular_d
 
-         # **Step 3: body frame to world frame**
-        R_world_body = np.array([
-            [np.cos(psi) * np.cos(theta_d), np.cos(psi) * np.sin(theta_d) * np.sin(phi_d) - np.sin(psi) * np.cos(phi_d), np.cos(psi) * np.sin(theta_d) * np.cos(phi_d) + np.sin(psi) * np.sin(phi_d)],
-            [np.sin(psi) * np.cos(theta_d), np.sin(psi) * np.sin(theta_d) * np.sin(phi_d) + np.cos(psi) * np.cos(phi_d), np.sin(psi) * np.sin(theta_d) * np.cos(phi_d) - np.cos(psi) * np.sin(phi_d)],
-            [-np.sin(theta_d), np.cos(theta_d) * np.sin(phi), np.cos(theta_d) * np.cos(phi_d)]
-        ])
-        
-        #torques_w = R_world_body@torques  # maintain altitude
-        # **output thrust**
-        thrust = R_world_body@np.array([0,0,T])  # maintain altitude
-        thrust_x = np.clip(thrust[0], -2.0, 2.0)  # X axis ±2N
-        thrust_y = np.clip(thrust[1], -2.0, 2.0)  # Y axis ±2N
-        thrust = np.array([thrust_x, thrust_y, thrust[2]])  # update the new thrust vector
+        thrust_x = np.clip(self.mass*acc_des[0], -2.0, 2.0)  # X axis limit in ±2N
+        thrust_y = np.clip(self.mass*acc_des[1], -2.0, 2.0)  # Y axis limit in ±2N
+        thrust_z = self.mass*acc_des[2]
+        thrust=np.array([thrust_x,thrust_y,thrust_z])
         
         # **set entity state**
         self.send_control(thrust, torques)
 
-        print(f"[DEBUG] pitch: {theta}")
-        print(f"[DEBUG] Attitude target: {theta_d}")
+        print(f"[DEBUG] thrusts: {thrust}")
+        print(f"[DEBUG] torques: {torques}")
             
         
 def main(args=None):

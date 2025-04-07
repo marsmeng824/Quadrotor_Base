@@ -3,10 +3,9 @@ from rclpy.node import Node
 from geometry_msgs.msg import Wrench
 from gazebo_msgs.srv import GetEntityState
 import numpy as np
-from f450_simulation.vectorPID import VectorPID
+from f450_simulation.controller.PID import PID
 import f450_simulation.transform3d as tf
 from geometry_msgs.msg import Vector3
-
 
 class QuadrotorPIDController(Node):
     def __init__(self):
@@ -22,26 +21,23 @@ class QuadrotorPIDController(Node):
         self.Kd_att = 0.2
       
         # target position
-        self.x_d, self.y_d, self.z_d = 2.0, 0.0, 2.0  
+        self.x_d, self.y_d, self.z_d = 2.0, 2.0, 2.0  
 
         # physics parameter
         self.mass = 2  # kg
         self.g = 9.81  # m/s² 
         self.drone_name = 'F450'
         
-        # PID chontrol
-        self.pid_pos = VectorPID(kp=[0.5,0.5,2], ki=[0.01,0.01,0.1], kd=[2,2,3])
-        self.pid_att = VectorPID(self.Kp_att, 0.05, self.Kd_att)
-        self.pid_ang = VectorPID(self.Kp_att, 0.05, self.Kd_att)
+        # PID control
+        self.pid_pos = PID(kp=[0.5,0.5,2], ki=[0.01,0.01,0.1], kd=[2,2,3])
+        self.pid_att = PID(self.Kp_att, 0.05, self.Kd_att)
 
-
+        #inertia Matrix
         self.J = np.array([
             [0.0411, 0, 0],
             [0, 0.0478, 0],
             [0, 0, 0.0599]
          ])
-
-       
 
         # sample time
         self.dt = 0.1
@@ -72,6 +68,7 @@ class QuadrotorPIDController(Node):
             self.get_logger().error("can't get Gazebo entity state")
             return
         
+        #get positon,orientation,linear velocity,angle velocity state information
         pos = response.state.pose.position
         ori = response.state.pose.orientation
         lin_vel = response.state.twist.linear
@@ -100,17 +97,15 @@ class QuadrotorPIDController(Node):
 
         self.force_publisher.publish(msg)
 
-
-
     def control_loop(self):
-        """ only `self.current_state` not None execute """
+        """ only self.current_state` not None execute """
         if self.current_state is None:
             return
 
         x, y, z = self.current_state["x"], self.current_state["y"], self.current_state["z"]
         phi, theta, psi = self.current_state["phi"], self.current_state["theta"], self.current_state["psi"]
-        euler=np.array([phi,theta,psi])
-        omega=np.array([self.current_state["p"], self.current_state["q"], self.current_state["r"]])
+      
+       
 
         # **Step 1: position control(outer control)**
         e_pos = np.array([self.x_d - x, self.y_d - y, self.z_d - z])
@@ -123,14 +118,11 @@ class QuadrotorPIDController(Node):
            np.clip(z_acc, -3.0, 3.0)
         ])
 
-        ## T = np.clip(self.mass * (z_acc + self.g), 0, 40)  Compute required thrust
-
-
-        # **Step# Compute roll (ϕ_d) and pitch (θ_d) using Eq. (29) and (30)
+        #add gravity compensation
         g = 9.81
         acc_des = a_des + np.array([0.0, 0.0, g])
 
-     # 3. compute expectation attitude 
+     # Expectation Attitude: Compute roll (ϕ_d) and pitch (θ_d) using Eq. (29) and (30)
         euler_des = tf.acc_to_euler(acc_des,psi)
         phi_d = euler_des[0]
         theta_d = euler_des[1]
@@ -140,12 +132,10 @@ class QuadrotorPIDController(Node):
         e_att = np.array([phi_d - phi, theta_d - theta, psi_d - psi])
         angular_d = self.pid_att.compute(e_att)
 
-        omega_d = tf.euler_to_omega(euler, angular_d)
-        e_oma = omega_d - omega
-        torques= self.J @self.pid_ang.compute(e_oma)
+        torques= self.J @angular_d
 
-        thrust_x = self.mass*acc_des[0]  
-        thrust_y = self.mass*acc_des[1]  
+        thrust_x = np.clip(self.mass*acc_des[0], -2.0, 2.0)  # X axis limit in ±2N
+        thrust_y = np.clip(self.mass*acc_des[1], -2.0, 2.0)  # Y axis limit in ±2N
         thrust_z = self.mass*acc_des[2]
         thrust = np.array([thrust_x, thrust_y, thrust_z])  # update thrust
         

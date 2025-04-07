@@ -20,7 +20,7 @@ def quat2euler(quaternion):
     if -0.0001<= pitch <= 0.0001:
        pitch = 0 
 
-    # 计算 Yaw (Z axis)
+    # compute Yaw (Z axis)
     siny_cosp = 2 * (w * z + x * y)
     cosy_cosp = 1 - 2 * (y * y + z * z)
     yaw = np.arctan2(siny_cosp, cosy_cosp)
@@ -61,7 +61,7 @@ def euler_to_omega(euler, euler_dot):
         T = np.array([
             [1, np.sin(phi)*np.tan(theta), np.cos(phi)*np.tan(theta)],
             [0, np.cos(phi),              -np.sin(phi)],
-            [0, np.sin(phi)/np.cos(theta), np.cos(phi)/np.cos(theta)]
+            [0, np.sin(phi)*np.sec(theta), np.cos(phi)*np.sec(theta)]
         ])
 
         return T @ euler_dot
